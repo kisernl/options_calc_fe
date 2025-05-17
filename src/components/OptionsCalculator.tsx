@@ -18,6 +18,7 @@ interface CalculatorState {
   optionChain: OptionChain | null;
   selectedExpiration: string | null;
   selectedStrike: number | null;
+  optionType: OptionType;
   premium: number;
   numberOfContracts: number;
   ownShares: boolean;
@@ -29,6 +30,7 @@ const initialState: CalculatorState = {
   optionChain: null,
   selectedExpiration: null,
   selectedStrike: null,
+  optionType: 'PUT',
   premium: 0,
   numberOfContracts: 1,
   ownShares: false,
@@ -51,9 +53,18 @@ const OptionsCalculator: React.FC = () => {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   
   // Get current calculator state based on option type
-  const currentState = optionType === 'PUT' ? putState : callState;
-  const setCurrentState = optionType === 'PUT' ? setPutState : setCallState;
-  
+  const getCurrentState = () => {
+    return optionType === 'PUT' ? putState : callState;
+  };
+
+  const setCurrentState = (newState: Partial<CalculatorState>) => {
+    if (optionType === 'PUT') {
+      setPutState(prev => ({ ...prev, ...newState }));
+    } else {
+      setCallState(prev => ({ ...prev, ...newState }));
+    }
+  };
+
   // Calculation result
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   
@@ -62,40 +73,46 @@ const OptionsCalculator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (currentState.stockData) {
+    if (getCurrentState().stockData) {
       fetchOptionChain();
     }
-  }, [currentState.stockData]);
+  }, [getCurrentState().stockData]);
   
   useEffect(() => {
     calculateMetrics();
   }, [
-    currentState.selectedStrike,
-    currentState.premium,
-    currentState.numberOfContracts,
-    currentState.ownShares,
-    currentState.purchasePrice,
+    getCurrentState().selectedStrike,
+    getCurrentState().premium,
+    getCurrentState().numberOfContracts,
+    getCurrentState().ownShares,
+    getCurrentState().purchasePrice,
     optionType,
   ]);
   
   const fetchOptionChain = async () => {
-    if (!currentState.stockData) return;
+    const currentState = getCurrentState();
+    if (!currentState?.stockData) return;
     
     try {
       setLoadingOptionChain(true);
       setError('');
       
-      const chain = await getOptionChain(currentState.stockData.symbol, currentState.stockData.price);
+      const { symbol, price } = currentState.stockData;
+      if (!symbol || !price) {
+        throw new Error('Invalid stock data');
+      }
       
-      if (!chain || chain.expirationDates.length === 0) {
+      const chain = await getOptionChain(symbol, price);
+      
+      if (!chain || !chain.expirationDates || chain.expirationDates.length === 0) {
         throw new Error('No option chain found for this stock');
       }
 
-      setCurrentState(prev => ({
-        ...prev,
+      setCurrentState({
+        ...currentState,
         optionChain: chain,
         selectedExpiration: chain.expirationDates[0] || null,
-      }));
+      });
     } catch (error: any) {
       setError(`No option chain found for this stock. Please select another stock.`);
       console.error('Error fetching option chain:', error);
@@ -114,7 +131,7 @@ const OptionsCalculator: React.FC = () => {
       // Set the first available expiration date as default
       const defaultExpiration = optionChain.expirationDates[0];
       
-      setCurrentState({
+      const newState: CalculatorState = {
         stockData: stock,
         optionChain,
         selectedExpiration: defaultExpiration,
@@ -122,167 +139,245 @@ const OptionsCalculator: React.FC = () => {
         premium: 0,
         numberOfContracts: 1,
         ownShares: false,
-        purchasePrice: 0
-      });
+        purchasePrice: 0,
+        optionType: optionType
+      };
+
+      if (optionType === 'PUT') {
+        setPutState(newState);
+      } else {
+        setCallState(newState);
+      }
       
       toast.success(`Loaded stock data for ${stock.symbol} at $${stock.price.toFixed(2)}`);
     } catch (error) {
       console.error('Error fetching option chain:', error);
       toast.error('Failed to fetch option chain');
       setError('Failed to fetch option chain');
+      
+      if (optionType === 'PUT') {
+        setPutState({
+          ...putState,
+          stockData: null,
+          optionChain: null,
+          selectedExpiration: null,
+          selectedStrike: null,
+          premium: 0
+        });
+      } else {
+        setCallState({
+          ...callState,
+          stockData: null,
+          optionChain: null,
+          selectedExpiration: null,
+          selectedStrike: null,
+          premium: 0
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const handleExpirationSelect = async (date: string) => {
     setIsLoading(true);
     setError('');
 
-    if (!currentState.stockData) {
-      toast.error('No stock data available');
-      setError('No stock data available');
-      return;
-    }
-    
     try {
-      if (!currentState.stockData) {
-        toast.error('Please select a stock first');
-        setError('Please select a stock first');
-        return;
-      }
-
-      if (!currentState.stockData?.price) {
-        toast.error('Stock price is not available');
-        setError('Stock price is not available');
+      const currentState = getCurrentState();
+      
+      if (!currentState?.stockData?.symbol || !currentState?.stockData?.price) {
+        toast.error('No stock data available');
+        setError('No stock data available');
         return;
       }
 
       const optionChain = await getOptionChain(currentState.stockData.symbol, currentState.stockData.price, date);
       const contracts = optionChain.options[date] || [];
 
-      // Return early if there are no contracts for this expiration date
       if (contracts.length === 0) {
         toast.error('No option contracts available for this expiration date');
         setError('No option contracts available for this expiration date');
-        setCurrentState(prev => ({
-          ...prev,
-          selectedExpiration: date,
-          selectedStrike: null,
-          premium: 0,
-          optionChain: null
-        }));
+        
+        if (optionType === 'PUT') {
+          setPutState({
+            ...putState,
+            selectedExpiration: date,
+            selectedStrike: null,
+            premium: 0,
+            optionChain: null
+          });
+        } else {
+          setCallState({
+            ...callState,
+            selectedExpiration: date,
+            selectedStrike: null,
+            premium: 0,
+            optionChain: null
+          });
+        }
         return;
       }
 
-      // Group filtered contracts by expiration date
-      const options: Record<string, OptionContract[]> = {
-        [date]: contracts
-      };
-
-      setCurrentState(prev => ({
-        ...prev,
-        selectedExpiration: date,
-        optionChain: {
-          options,
-          expirationDates: [date],
-          closestStrike: null,
-          selectedStrikes: []
-        },
-        selectedStrike: null,
-        premium: 0
-      }));
+      if (optionType === 'PUT') {
+        setPutState({
+          ...putState,
+          selectedExpiration: date,
+          optionChain,
+          selectedStrike: null,
+          premium: 0
+        });
+      } else {
+        setCallState({
+          ...callState,
+          selectedExpiration: date,
+          optionChain,
+          selectedStrike: null,
+          premium: 0
+        });
+      }
     } catch (err) {
       console.error('Error fetching option chain:', err);
       toast.error('Please select a valid expiration date');
       setError('Please select a valid expiration date');
+      
+      if (optionType === 'PUT') {
+        setPutState({
+          ...putState,
+          selectedExpiration: null,
+          selectedStrike: null,
+          premium: 0,
+          optionChain: null
+        });
+      } else {
+        setCallState({
+          ...callState,
+          selectedExpiration: null,
+          selectedStrike: null,
+          premium: 0,
+          optionChain: null
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const handleStrikeSelect = (strike: number) => {
-    if (!currentState.selectedExpiration) {
+    const currentState = getCurrentState();
+    
+    if (!currentState?.selectedExpiration) {
       toast.error('Please select an expiration date first');
       return;
     }
-    
-    setCurrentState(prev => ({
-      ...prev,
-      selectedStrike: strike,
-    }));
-  };
-  
-  const handleNumberOfContractsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    if (!isNaN(value) && value > 0) {
-      setCurrentState(prev => ({ ...prev, numberOfContracts: value }));
+
+    if (!currentState?.optionChain) {
+      toast.error('No option chain data available');
+      return;
+    }
+
+    const contracts = currentState.optionChain.options[currentState.selectedExpiration] || [];
+    const selectedContract = contracts.find(c => c.strike_price === strike);
+
+    if (!selectedContract) {
+      toast.error('No contract found for selected strike');
+      return;
+    }
+
+    if (optionType === 'PUT') {
+      setPutState({
+        ...putState,
+        selectedStrike: strike,
+        premium: selectedContract.premium
+      });
+    } else {
+      setCallState({
+        ...callState,
+        selectedStrike: strike,
+        premium: selectedContract.premium
+      });
     }
   };
-  
+
   const handlePremiumChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
     if (!isNaN(value) && value >= 0) {
-      setCurrentState(prev => ({ ...prev, premium: value }));
+      if (optionType === 'PUT') {
+        setPutState(prev => ({ ...prev, premium: value }));
+      } else {
+        setCallState(prev => ({ ...prev, premium: value }));
+      }
     }
   };
-  
+
+  const handleNumberOfContractsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    if (!isNaN(value) && value > 0) {
+      if (optionType === 'PUT') {
+        setPutState(prev => ({ ...prev, numberOfContracts: value }));
+      } else {
+        setCallState(prev => ({ ...prev, numberOfContracts: value }));
+      }
+    }
+  };
+
   const handlePurchasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
     if (!isNaN(value) && value >= 0) {
-      setCurrentState(prev => ({ ...prev, purchasePrice: value }));
+      if (optionType === 'PUT') {
+        setPutState(prev => ({ ...prev, purchasePrice: value }));
+      } else {
+        setCallState(prev => ({ ...prev, purchasePrice: value }));
+      }
     }
   };
-  
+
   const calculateMetrics = () => {
-    const {
-      stockData,
-      selectedExpiration,
-      selectedStrike,
-      premium,
-      numberOfContracts,
-      ownShares,
-      purchasePrice,
-    } = currentState;
+    const currentState = getCurrentState();
     
-    if (
-      !stockData ||
-      !selectedExpiration ||
-      !selectedStrike ||
-      premium <= 0 ||
-      numberOfContracts <= 0
-    ) {
+    if (!currentState?.stockData || !currentState?.optionChain || !currentState?.selectedStrike || !currentState?.selectedExpiration) {
       setCalculationResult(null);
       return;
     }
-    
+
     const result = calculateOptionMetrics(
-      optionType,
-      stockData.price,
-      selectedStrike,
-      premium,
-      selectedExpiration,
-      numberOfContracts,
-      ownShares,
-      purchasePrice > 0 ? purchasePrice : stockData.price
+      currentState.optionType,
+      currentState.stockData.price,
+      currentState.selectedStrike,
+      currentState.optionChain?.options[currentState.selectedExpiration]?.find(option => option.strike_price === currentState.selectedStrike)?.premium || 0,
+      currentState.selectedExpiration,
+      currentState.numberOfContracts,
+      currentState.ownShares,
+      currentState.purchasePrice
     );
-    
+
     setCalculationResult(result);
   };
-  
+
   const handleReset = () => {
-    setCurrentState(initialState);
+    setCurrentState({
+      stockData: null,
+      optionChain: null,
+      selectedExpiration: null,
+      selectedStrike: null,
+      optionType: optionType,
+      premium: 0,
+      numberOfContracts: 1,
+      ownShares: false,
+      purchasePrice: 0
+    });
     setCalculationResult(null);
   };
-  
+
   const getOptionsForSelectedExpiration = (): OptionContract[] => {
-    const { optionChain, selectedExpiration } = currentState;
-    if (!optionChain || !selectedExpiration) {
+    const currentState = getCurrentState();
+    if (!currentState?.optionChain || !currentState?.selectedExpiration) {
       return [];
     }
-    return optionChain.options[selectedExpiration] || [];
+
+    return currentState.optionChain.options[currentState.selectedExpiration] || [];
   };
-  
+
   const handleDateChange = (date: string) => {
     setSelectedDate(date);
     handleExpirationSelect(date);
@@ -362,15 +457,18 @@ const OptionsCalculator: React.FC = () => {
                 <StockSymbolInput onStockSelect={handleStockSelect} />
               </div>
               
-              {currentState.stockData && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Price</label>
-                  <div className="flex items-center h-12 px-4 border border-gray-300 rounded-lg bg-gray-50">
-                    <DollarSign className="w-5 h-5 text-gray-400 mr-1" />
-                    <span className="font-medium text-gray-800">{currentState.stockData.price.toFixed(2)}</span>
+              {(() => {
+                const currentState = getCurrentState();
+                return currentState.stockData ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Current Price</label>
+                    <div className="flex items-center h-12 px-4 border border-gray-300 rounded-lg bg-gray-50">
+                      <DollarSign className="w-5 h-5 text-gray-400 mr-1" />
+                      <span className="font-medium text-gray-800">{currentState.stockData.price.toFixed(2)}</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
             </div>
           </div>
           
@@ -403,9 +501,9 @@ const OptionsCalculator: React.FC = () => {
               {!error && (
                 <StrikePriceSelector
                   options={getOptionsForSelectedExpiration()}
-                  selectedStrike={currentState.selectedStrike}
+                  selectedStrike={getCurrentState().selectedStrike}
                   onStrikeSelect={handleStrikeSelect}
-                  stockPrice={currentState.stockData?.price || 0}
+                  stockPrice={getCurrentState().stockData?.price || 0}
                   isLoading={isLoading}
                   disabled={isLoading}
                 />
@@ -421,7 +519,7 @@ const OptionsCalculator: React.FC = () => {
                 <input
                   type="number"
                   min="1"
-                  value={currentState.numberOfContracts}
+                  value={getCurrentState().numberOfContracts}
                   onChange={handleNumberOfContractsChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -439,7 +537,7 @@ const OptionsCalculator: React.FC = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={currentState.premium}
+                    value={getCurrentState().premium}
                     onChange={handlePremiumChange}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -454,8 +552,8 @@ const OptionsCalculator: React.FC = () => {
                   <input
                     type="checkbox"
                     id="ownShares"
-                    checked={currentState.ownShares}
-                    onChange={(e) => setCurrentState(prev => ({ ...prev, ownShares: e.target.checked }))}
+                    checked={getCurrentState().ownShares}
+                    onChange={(e) => setCallState(prev => ({ ...prev, ownShares: e.target.checked }))}
                     className="h-4 w-4 text-blue-600 rounded border-gray-300"
                   />
                   <label htmlFor="ownShares" className="ml-2 text-sm font-medium text-gray-700">
@@ -463,7 +561,7 @@ const OptionsCalculator: React.FC = () => {
                   </label>
                 </div>
                 
-                {currentState.ownShares && (
+                {getCurrentState().ownShares && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Purchase Price Per Share
@@ -476,7 +574,7 @@ const OptionsCalculator: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={currentState.purchasePrice}
+                        value={getCurrentState().purchasePrice}
                         onChange={handlePurchasePriceChange}
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
