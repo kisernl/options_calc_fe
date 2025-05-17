@@ -44,6 +44,9 @@ const OptionsCalculator: React.FC = () => {
   // Loading state
   const [loadingOptionChain, setLoadingOptionChain] = useState(false);
   
+  // Error state
+  const [error, setError] = useState<string>('');
+  
   // API key modal state
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   
@@ -56,7 +59,6 @@ const OptionsCalculator: React.FC = () => {
   
   // Date selection state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -81,7 +83,7 @@ const OptionsCalculator: React.FC = () => {
     
     try {
       setLoadingOptionChain(true);
-      setError(null);
+      setError('');
       
       const chain = await getOptionChain(currentState.stockData.symbol, currentState.stockData.price);
       
@@ -102,9 +104,35 @@ const OptionsCalculator: React.FC = () => {
     }
   };
   
-  const handleStockSelect = (stock: StockData) => {
-    setCurrentState(prev => ({ ...prev, stockData: stock }));
-    toast.success(`Loaded stock data for ${stock.symbol} at $${stock.price.toFixed(2)}`);
+  const handleStockSelect = async (stock: StockData) => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const optionChain = await getOptionChain(stock.symbol, stock.price);
+      
+      // Set the first available expiration date as default
+      const defaultExpiration = optionChain.expirationDates[0];
+      
+      setCurrentState({
+        stockData: stock,
+        optionChain,
+        selectedExpiration: defaultExpiration,
+        selectedStrike: null,
+        premium: 0,
+        numberOfContracts: 1,
+        ownShares: false,
+        purchasePrice: 0
+      });
+      
+      toast.success(`Loaded stock data for ${stock.symbol} at $${stock.price.toFixed(2)}`);
+    } catch (error) {
+      console.error('Error fetching option chain:', error);
+      toast.error('Failed to fetch option chain');
+      setError('Failed to fetch option chain');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const handleExpirationSelect = async (date: string) => {
@@ -113,17 +141,20 @@ const OptionsCalculator: React.FC = () => {
 
     if (!currentState.stockData) {
       toast.error('No stock data available');
+      setError('No stock data available');
       return;
     }
     
     try {
       if (!currentState.stockData) {
         toast.error('Please select a stock first');
+        setError('Please select a stock first');
         return;
       }
 
       if (!currentState.stockData?.price) {
         toast.error('Stock price is not available');
+        setError('Stock price is not available');
         return;
       }
 
@@ -133,6 +164,7 @@ const OptionsCalculator: React.FC = () => {
       // Return early if there are no contracts for this expiration date
       if (contracts.length === 0) {
         toast.error('No option contracts available for this expiration date');
+        setError('No option contracts available for this expiration date');
         setCurrentState(prev => ({
           ...prev,
           selectedExpiration: date,
@@ -143,28 +175,6 @@ const OptionsCalculator: React.FC = () => {
         return;
       }
 
-      // Extract strike prices and sort them
-      const strikePrices = contracts
-        .map(contract => contract.strike_price)
-        .sort((a, b) => a - b);
-
-      // Return early if we don't have stock data
-      if (!currentState.stockData) {
-        toast.error('Stock data is not available');
-        return;
-      }
-
-      // Find closest strike price to stock price
-      const closestStrike = strikePrices.reduce((prev, curr) => {
-        return Math.abs(curr - currentState.stockData!.price) < Math.abs(prev - currentState.stockData!.price) ? curr : prev;
-      });
-
-      // Get 7 strikes above and below closest strike
-      const closestIndex = strikePrices.indexOf(closestStrike);
-      const start = Math.max(0, closestIndex - 7);
-      const end = Math.min(strikePrices.length, closestIndex + 8);
-      const selectedStrikes = strikePrices.slice(start, end);
-
       // Group filtered contracts by expiration date
       const options: Record<string, OptionContract[]> = {
         [date]: contracts
@@ -173,23 +183,30 @@ const OptionsCalculator: React.FC = () => {
       setCurrentState(prev => ({
         ...prev,
         selectedExpiration: date,
-        selectedStrike: null,
-        premium: 0,
         optionChain: {
           options,
           expirationDates: [date],
-          closestStrike,
-          selectedStrikes
-        }
+          closestStrike: null,
+          selectedStrikes: []
+        },
+        selectedStrike: null,
+        premium: 0
       }));
-    } catch (error: any) {
-      setError(error.message);
+    } catch (err) {
+      console.error('Error fetching option chain:', err);
+      toast.error('Please select a valid expiration date');
+      setError('Please select a valid expiration date');
     } finally {
       setIsLoading(false);
     }
   };
   
   const handleStrikeSelect = (strike: number) => {
+    if (!currentState.selectedExpiration) {
+      toast.error('Please select an expiration date first');
+      return;
+    }
+    
     setCurrentState(prev => ({
       ...prev,
       selectedStrike: strike,
@@ -383,14 +400,16 @@ const OptionsCalculator: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Strike Price
               </label>
-              <StrikePriceSelector
-                options={getOptionsForSelectedExpiration()}
-                selectedStrike={currentState.selectedStrike}
-                onStrikeSelect={handleStrikeSelect}
-                stockPrice={currentState.stockData?.price || 0}
-                isLoading={isLoading}
-                disabled={!currentState.selectedExpiration}
-              />
+              {!error && (
+                <StrikePriceSelector
+                  options={getOptionsForSelectedExpiration()}
+                  selectedStrike={currentState.selectedStrike}
+                  onStrikeSelect={handleStrikeSelect}
+                  stockPrice={currentState.stockData?.price || 0}
+                  isLoading={isLoading}
+                  disabled={isLoading}
+                />
+              )}
             </div>
             
             {/* Number of Contracts and Premium */}
