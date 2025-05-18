@@ -47,13 +47,30 @@ export const calculateOptionMetrics = (
 };
 
 export const calculateDaysToExpiration = (expirationDate: string): number => {
+  // Create dates at noon UTC to avoid timezone issues
   const today = new Date();
-  const expiration = new Date(expirationDate);
-  return differenceInCalendarDays(expiration, today);
+  const todayNoon = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12, 0, 0));
+  
+  const exp = new Date(expirationDate);
+  const expNoon = new Date(Date.UTC(exp.getUTCFullYear(), exp.getUTCMonth(), exp.getUTCDate(), 12, 0, 0));
+  
+  const diffMs = expNoon.getTime() - todayNoon.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  
+  return Math.max(0, diffDays);
 };
 
 export const calculateAnnualizedReturn = (returnOnCapital: number, daysToExpiration: number): number => {
-  return (returnOnCapital / daysToExpiration) * 365;
+  if (daysToExpiration <= 0 || returnOnCapital <= -100) {
+    return 0;
+  }
+  
+  // Simple interest calculation: (return / days) * 365
+  const dailyReturn = returnOnCapital / daysToExpiration;
+  const annualized = dailyReturn * 365;
+  
+  // Round to 1 decimal place
+  return parseFloat(annualized.toFixed(1));
 };
 
 export const formatCurrency = (value: number): string => {
@@ -70,5 +87,5 @@ export const formatPercentage = (value: number): string => {
     style: 'percent',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value / 100);
+  }).format(value);
 };
