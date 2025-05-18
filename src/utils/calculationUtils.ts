@@ -20,7 +20,7 @@ export const calculateOptionMetrics = (
   if (optionType === 'PUT') {
     // Cash Secured Put
     capitalRequired = strikePrice * numberOfContracts * 100;
-    returnOnCapital = (premiumTotal / capitalRequired) * 100;
+    returnOnCapital = premiumTotal / capitalRequired;
   } else {
     // Covered Call
     if (ownShares) {

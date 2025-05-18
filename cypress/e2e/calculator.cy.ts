@@ -80,20 +80,44 @@ describe('Options Calculator', () => {
     });
   
     it('should allow entering and searching for a stock', () => {
-      // Type in the stock symbol and submit
+      // Log all network requests
+      cy.intercept('*', (req) => {
+        console.log('Request:', req.method, req.url);
+        req.continue();
+      });
+
+      // Type in the stock symbol
       cy.get('input[placeholder*="Enter stock symbol"]')
         .type('AAPL')
         .should('have.value', 'AAPL');
       
-      // Submit the form
-      cy.get('form').first().submit();
+      // Click the "Go" button to submit the form
+      cy.get('form').first().within(() => {
+        cy.get('button[type="submit"]').click();
+      });
       
-      // Wait for the stock price API call
-      cy.wait('@getStockPrice');
+      // Wait for the stock price API call and log the response
+      cy.wait('@getStockPrice').then((interception) => {
+        console.log('Stock price API response:', interception.response?.body);
+      });
+
+      // Add a small delay to ensure the UI updates
+      cy.wait(1000);
       
-      // Verify the stock price is displayed - look for the price in any element
-      cy.contains(new RegExp(`${mockStockData.price.toFixed(2)}`), { timeout: 10000 })
-        .should('be.visible');
+      // Debug: Log the entire body to see what's rendered
+      cy.document().then((doc) => {
+        console.log('Document body:', doc.body.innerText);
+      });
+      
+      // Check if the stock data is loaded by looking for the stock symbol
+      cy.contains('AAPL', { timeout: 10000 }).should('be.visible');
+      
+      // Now look for the price
+      cy.get('div').contains('Current Price', { timeout: 10000 })
+        .should('be.visible')
+        .parent()
+        .find('span')
+        .should('contain', '175.34');
     });
   
     it('should allow selecting expiration date after stock is selected', () => {
@@ -138,14 +162,13 @@ describe('Options Calculator', () => {
       // Find and click the API button - use force:true in case it's not immediately clickable
       cy.contains('button', 'API').click({ force: true });
       
-      // The modal should be visible - wait for the animation to complete
-      cy.get('[role="dialog"]', { timeout: 10000 }).should('be.visible');
-      cy.contains('API Key Configuration').should('be.visible');
+      // The modal should be visible - check for the modal content
+      cy.contains('Alpaca API Settings').should('be.visible');
       
-      // Close the modal - use force:true
-      cy.contains('button', 'Close').click({ force: true });
+      // Close the modal - use the close button
+      cy.get('button').contains('Cancel').click({ force: true });
       
-      // The modal should be gone - wait for the animation to complete
-      cy.get('[role="dialog"]').should('not.exist');
+      // The modal should be gone
+      cy.contains('Alpaca API Settings').should('not.exist');
     });
   });
