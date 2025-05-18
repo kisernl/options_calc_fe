@@ -72,7 +72,14 @@ const OptionsCalculator: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const stockSymbolInputRef = useRef<{ reset: () => void }>(null);
+  // Add refs for both PUT and CALL stock inputs
+  const putStockInputRef = useRef<{ reset: () => void }>(null);
+  const callStockInputRef = useRef<{ reset: () => void }>(null);
+
+  // Get the appropriate ref based on option type
+  const getCurrentStockInputRef = () => {
+    return optionType === 'PUT' ? putStockInputRef : callStockInputRef;
+  };
 
   useEffect(() => {
     if (getCurrentState().stockData) {
@@ -338,9 +345,10 @@ const OptionsCalculator: React.FC = () => {
     // Clear any errors
     setError('');
     
-    // Reset the stock input
-    if (stockSymbolInputRef.current) {
-      stockSymbolInputRef.current.reset();
+    // Reset the stock input for the current option type
+    const currentRef = getCurrentStockInputRef();
+    if (currentRef.current) {
+      currentRef.current.reset();
     }
     
     // Close any open toasts
@@ -433,8 +441,9 @@ const OptionsCalculator: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stock Symbol</label>
                 <StockSymbolInput 
-                  ref={stockSymbolInputRef}
+                  ref={optionType === 'PUT' ? putStockInputRef : callStockInputRef}
                   onStockSelect={handleStockSelect} 
+                  value={getCurrentState().stockData?.symbol || ''}
                 />
               </div>
               
