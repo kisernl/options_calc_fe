@@ -69,8 +69,23 @@ const OptionsCalculator: React.FC = () => {
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   
   // Date selection state
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [putSelectedDate, setPutSelectedDate] = useState<string | null>(null);
+  const [callSelectedDate, setCallSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Helper to get the current selected date based on option type
+  const getCurrentSelectedDate = () => {
+    return optionType === 'PUT' ? putSelectedDate : callSelectedDate;
+  };
+
+  // Helper to set the current selected date based on option type
+  const setCurrentSelectedDate = (date: string | null) => {
+    if (optionType === 'PUT') {
+      setPutSelectedDate(date);
+    } else {
+      setCallSelectedDate(date);
+    }
+  };
 
   // Add refs for both PUT and CALL stock inputs
   const putStockInputRef = useRef<{ reset: () => void }>(null);
@@ -337,7 +352,7 @@ const OptionsCalculator: React.FC = () => {
     });
     
     // Reset the selected date
-    setSelectedDate(null);
+    setCurrentSelectedDate(null);
     
     // Reset calculation result
     setCalculationResult(null);
@@ -365,7 +380,7 @@ const OptionsCalculator: React.FC = () => {
   };
 
   const handleDateChange = (date: string) => {
-    setSelectedDate(date);
+    setCurrentSelectedDate(date);
     handleExpirationSelect(date);
   };
 
@@ -471,12 +486,12 @@ const OptionsCalculator: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Expiration Date
               </label>
-              <input
-                type="date"
-                value={selectedDate || ''}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="border rounded-md px-3 py-2"
-                disabled={isLoading}
+              <ExpirationDateSelector
+                selectedDate={getCurrentSelectedDate()}
+                onSelect={handleDateChange}
+                isLoading={isLoading || loadingOptionChain}
+                disabled={!getCurrentState().stockData}
+                minDate={new Date().toISOString().split('T')[0]} // Today's date as min
               />
               {error && (
                 <div className="text-red-500 text-sm">{error}</div>
