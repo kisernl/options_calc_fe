@@ -2,7 +2,7 @@
   "name": "options-calculator",
   "private": true,
   "version": "0.0.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,7 +14,11 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:update-snapshots": "playwright test --update-snapshots"
+    "test:e2e:update-snapshots": "playwright test --update-snapshots",
+    "cypress:open": "cypress open --config-file cypress.config.mjs",
+    "cypress:run": "cypress run --config-file cypress.config.mjs",
+    "cypress:open-ct": "cypress open-ct --config-file cypress.config.mjs",
+    "cypress:run-ct": "cypress run-ct --config-file cypress.config.mjs"
   },
   "dependencies": {
     "axios": "^1.6.7",
@@ -25,6 +29,7 @@
     "react-toastify": "^10.0.4"
   },
   "devDependencies": {
+    "@cypress/vite-dev-server": "^6.0.3",
     "@eslint/js": "^9.9.1",
     "@playwright/test": "^1.44.0",
     "@testing-library/jest-dom": "^6.4.2",
@@ -37,7 +42,10 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
     "cross-env": "^7.0.3",
+    "cypress": "^14.3.3",
+    "cypress-real-events": "^1.14.0",
     "eslint": "^9.9.1",
+    "eslint-plugin-cypress": "^2.15.2",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
@@ -49,6 +57,13 @@
     "ts-jest": "^29.1.2",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vite-tsconfig-paths": "^4.3.2"
+  },
+  "eslintConfig": {
+    "extends": [
+      "eslint:recommended",
+      "plugin:cypress/recommended"
+    ]
   }
 }

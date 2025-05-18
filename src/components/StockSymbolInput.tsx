@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { Search, XCircle, Loader2 } from 'lucide-react';
 import { getStockPrice } from '../services/alpacaService';
 import { StockData } from '../types';
@@ -7,10 +7,23 @@ interface StockSymbolInputProps {
   onStockSelect: (stock: StockData) => void;
 }
 
-const StockSymbolInput: React.FC<StockSymbolInputProps> = ({ onStockSelect }) => {
+export interface StockSymbolInputRef {
+  reset: () => void;
+}
+
+const StockSymbolInput = forwardRef<StockSymbolInputRef, StockSymbolInputProps>(({ onStockSelect }, ref) => {
   const [symbol, setSymbol] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Expose the reset method via ref
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      setSymbol('');
+      setError('');
+      setLoading(false);
+    }
+  }));
   
   const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSymbol(e.target.value.toUpperCase());
@@ -68,6 +81,7 @@ const StockSymbolInput: React.FC<StockSymbolInputProps> = ({ onStockSelect }) =>
               type="button"
               onClick={handleClear}
               className="absolute inset-y-0 right-12 flex items-center pr-2"
+              aria-label="Clear input"
             >
               <XCircle className="w-5 h-5 text-gray-400 hover:text-gray-600 transition-colors" />
             </button>
@@ -92,6 +106,8 @@ const StockSymbolInput: React.FC<StockSymbolInputProps> = ({ onStockSelect }) =>
       )}
     </div>
   );
-};
+});
+
+StockSymbolInput.displayName = 'StockSymbolInput';
 
 export default StockSymbolInput;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { BarChart3, TrendingDown, TrendingUp, RefreshCcw, DollarSign, Key } from 'lucide-react';
@@ -71,6 +71,8 @@ const OptionsCalculator: React.FC = () => {
   // Date selection state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const stockSymbolInputRef = useRef<{ reset: () => void }>(null);
 
   useEffect(() => {
     if (getCurrentState().stockData) {
@@ -344,7 +346,7 @@ const OptionsCalculator: React.FC = () => {
       currentState.optionType,
       currentState.stockData.price,
       currentState.selectedStrike,
-      currentState.optionChain?.options[currentState.selectedExpiration]?.find(option => option.strike_price === currentState.selectedStrike)?.premium || 0,
+      currentState.premium, // Use the premium from state
       currentState.selectedExpiration,
       currentState.numberOfContracts,
       currentState.ownShares,
@@ -355,18 +357,32 @@ const OptionsCalculator: React.FC = () => {
   };
 
   const handleReset = () => {
-    setCurrentState({
-      stockData: null,
-      optionChain: null,
-      selectedExpiration: null,
-      selectedStrike: null,
-      optionType: optionType,
-      premium: 0,
-      numberOfContracts: 1,
-      ownShares: false,
-      purchasePrice: 0
+    // Reset both put and call states to initial state
+    setPutState({
+      ...initialState,
+      optionType: 'PUT'
     });
+    setCallState({
+      ...initialState,
+      optionType: 'CALL'
+    });
+    
+    // Reset the selected date
+    setSelectedDate(null);
+    
+    // Reset calculation result
     setCalculationResult(null);
+    
+    // Clear any errors
+    setError('');
+    
+    // Reset the stock input
+    if (stockSymbolInputRef.current) {
+      stockSymbolInputRef.current.reset();
+    }
+    
+    // Close any open toasts
+    toast.dismiss();
   };
 
   const getOptionsForSelectedExpiration = (): OptionContract[] => {
@@ -454,7 +470,10 @@ const OptionsCalculator: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stock Symbol</label>
-                <StockSymbolInput onStockSelect={handleStockSelect} />
+                <StockSymbolInput 
+                  ref={stockSymbolInputRef}
+                  onStockSelect={handleStockSelect} 
+                />
               </div>
               
               {(() => {
