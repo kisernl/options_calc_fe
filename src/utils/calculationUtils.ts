@@ -30,7 +30,7 @@ export const calculateOptionMetrics = (
       // Otherwise, calculate against current stock price
       capitalRequired = stockPrice * numberOfContracts * 100;
     }
-    returnOnCapital = (premiumTotal / capitalRequired) * 100;
+    returnOnCapital = premiumTotal / capitalRequired;
   }
   
   // Calculate annualized return

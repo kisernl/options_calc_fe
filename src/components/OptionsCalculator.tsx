@@ -90,7 +90,21 @@ const OptionsCalculator: React.FC = () => {
     getCurrentState().purchasePrice,
     optionType,
   ]);
-  
+
+  useEffect(() => {
+    const currentState = getCurrentState();
+    if (currentState.stockData) {
+      setCalculationResult(null);
+    }
+  }, [getCurrentState().stockData]);
+
+  useEffect(() => {
+    const currentState = getCurrentState();
+    if (currentState.selectedExpiration) {
+      setCalculationResult(null);
+    }
+  }, [getCurrentState().selectedExpiration]);
+
   const fetchOptionChain = async () => {
     const currentState = getCurrentState();
     if (!currentState?.stockData) return;
@@ -126,56 +140,42 @@ const OptionsCalculator: React.FC = () => {
   const handleStockSelect = async (stock: StockData) => {
     setIsLoading(true);
     setError('');
+    
+    // Reset calculation result when stock changes
+    setCalculationResult(null);
 
     try {
-      const optionChain = await getOptionChain(stock.symbol, stock.price);
-      
-      // Set the first available expiration date as default
-      const defaultExpiration = optionChain.expirationDates[0];
-      
-      const newState: CalculatorState = {
-        stockData: stock,
-        optionChain,
-        selectedExpiration: defaultExpiration,
+      // Clear previous option chain and selections
+      setCurrentState({
+        optionChain: null,
+        selectedExpiration: null,
         selectedStrike: null,
         premium: 0,
-        numberOfContracts: 1,
-        ownShares: false,
-        purchasePrice: 0,
-        optionType: optionType
-      };
+        stockData: stock
+      });
 
-      if (optionType === 'PUT') {
-        setPutState(newState);
-      } else {
-        setCallState(newState);
-      }
+      const optionChain = await getOptionChain(stock.symbol, stock.price);
       
-      toast.success(`Loaded stock data for ${stock.symbol} at $${stock.price.toFixed(2)}`);
+      setCurrentState({
+        optionChain,
+        selectedExpiration: optionChain.expirationDates[0] || null,
+        selectedStrike: null,
+        premium: 0
+      });
+
+      setError('');
     } catch (error) {
       console.error('Error fetching option chain:', error);
-      toast.error('Failed to fetch option chain');
       setError('Failed to fetch option chain');
       
-      if (optionType === 'PUT') {
-        setPutState({
-          ...putState,
-          stockData: null,
-          optionChain: null,
-          selectedExpiration: null,
-          selectedStrike: null,
-          premium: 0
-        });
-      } else {
-        setCallState({
-          ...callState,
-          stockData: null,
-          optionChain: null,
-          selectedExpiration: null,
-          selectedStrike: null,
-          premium: 0
-        });
-      }
+      // Reset state on error
+      setCurrentState({
+        stockData: null,
+        optionChain: null,
+        selectedExpiration: null,
+        selectedStrike: null,
+        premium: 0
+      });
     } finally {
       setIsLoading(false);
     }
@@ -184,6 +184,9 @@ const OptionsCalculator: React.FC = () => {
   const handleExpirationSelect = async (date: string) => {
     setIsLoading(true);
     setError('');
+    
+    // Reset calculation result when expiration changes
+    setCalculationResult(null);
 
     try {
       const currentState = getCurrentState();
@@ -194,72 +197,31 @@ const OptionsCalculator: React.FC = () => {
         return;
       }
 
-      const optionChain = await getOptionChain(currentState.stockData.symbol, currentState.stockData.price, date);
-      const contracts = optionChain.options[date] || [];
-
-      if (contracts.length === 0) {
-        toast.error('No option contracts available for this expiration date');
-        setError('No option contracts available for this expiration date');
-        
-        if (optionType === 'PUT') {
-          setPutState({
-            ...putState,
-            selectedExpiration: date,
-            selectedStrike: null,
-            premium: 0,
-            optionChain: null
-          });
-        } else {
-          setCallState({
-            ...callState,
-            selectedExpiration: date,
-            selectedStrike: null,
-            premium: 0,
-            optionChain: null
-          });
-        }
-        return;
-      }
-
-      if (optionType === 'PUT') {
-        setPutState({
-          ...putState,
-          selectedExpiration: date,
-          optionChain,
-          selectedStrike: null,
-          premium: 0
-        });
-      } else {
-        setCallState({
-          ...callState,
-          selectedExpiration: date,
-          optionChain,
-          selectedStrike: null,
-          premium: 0
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching option chain:', err);
-      toast.error('Please select a valid expiration date');
-      setError('Please select a valid expiration date');
+      const optionChain = await getOptionChain(
+        currentState.stockData.symbol, 
+        currentState.stockData.price, 
+        date
+      );
       
-      if (optionType === 'PUT') {
-        setPutState({
-          ...putState,
-          selectedExpiration: null,
-          selectedStrike: null,
-          premium: 0,
-          optionChain: null
-        });
-      } else {
-        setCallState({
-          ...callState,
-          selectedExpiration: null,
-          selectedStrike: null,
-          premium: 0,
-          optionChain: null
-        });
-      }
+      setCurrentState({
+        optionChain,
+        selectedExpiration: date,
+        selectedStrike: null,
+        premium: 0
+      });
+      
+      setError('');
+    } catch (error) {
+      console.error('Error fetching option chain:', error);
+      setError('Failed to fetch option chain for selected date');
+      
+      // Reset state on error
+      setCurrentState({
+        optionChain: null,
+        selectedExpiration: null,
+        selectedStrike: null,
+        premium: 0
+      });
     } finally {
       setIsLoading(false);
     }
