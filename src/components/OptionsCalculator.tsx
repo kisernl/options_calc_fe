@@ -307,34 +307,47 @@ const OptionsCalculator: React.FC = () => {
     }
   };
 
+  // Add state for covered call purchase price
+  const [purchasePrice, setPurchasePrice] = useState<number | null>(null);
+
   const handlePurchasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
-    if (!isNaN(value) && value >= 0) {
-      if (optionType === 'PUT') {
-        setPutState(prev => ({ ...prev, purchasePrice: value }));
-      } else {
-        setCallState(prev => ({ ...prev, purchasePrice: value }));
-      }
+    const newPurchasePrice = isNaN(value) ? null : value;
+    setPurchasePrice(newPurchasePrice);
+    
+    // Update the appropriate state based on option type
+    if (optionType === 'PUT') {
+      setPutState(prev => ({ ...prev, purchasePrice: newPurchasePrice || 0 }));
+    } else {
+      setCallState(prev => ({ ...prev, purchasePrice: newPurchasePrice || 0 }));
     }
+    
+    // Recalculate metrics after a short delay to avoid excessive calculations
+    const timeoutId = setTimeout(() => {
+      calculateMetrics();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
   };
 
   const calculateMetrics = () => {
     const currentState = getCurrentState();
     
-    if (!currentState?.stockData || !currentState?.optionChain || !currentState?.selectedStrike || !currentState?.selectedExpiration) {
-      setCalculationResult(null);
+    if (!currentState.selectedStrike || !currentState.stockData?.price || !currentState.selectedExpiration) {
       return;
     }
 
     const result = calculateOptionMetrics(
-      currentState.optionType,
+      optionType,
       currentState.stockData.price,
       currentState.selectedStrike,
-      currentState.premium, // Use the premium from state
+      currentState.premium,
       currentState.selectedExpiration,
       currentState.numberOfContracts,
       currentState.ownShares,
-      currentState.purchasePrice
+      optionType === 'CALL' && currentState.ownShares 
+        ? (purchasePrice || currentState.stockData.price) 
+        : undefined
     );
 
     setCalculationResult(result);
@@ -511,6 +524,7 @@ const OptionsCalculator: React.FC = () => {
                   stockPrice={getCurrentState().stockData?.price || 0}
                   isLoading={isLoading}
                   disabled={isLoading}
+                  optionType={optionType}
                 />
               )}
             </div>
@@ -569,21 +583,28 @@ const OptionsCalculator: React.FC = () => {
                 
                 {getCurrentState().ownShares && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Purchase Price Per Share
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <DollarSign className="w-5 h-5 text-gray-400" />
+                    {/* Purchase Price (for covered calls) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Purchase Price (Optional)
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                          <DollarSign className="w-4 h-4 text-gray-400" />
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={purchasePrice || ''}
+                          onChange={handlePurchasePriceChange}
+                          placeholder={`Current: $${getCurrentState().stockData?.price?.toFixed(2) || '0.00'}`}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                       </div>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={getCurrentState().purchasePrice}
-                        onChange={handlePurchasePriceChange}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Leave empty to use current price (${getCurrentState().stockData?.price?.toFixed(2) || '0.00'})
+                      </p>
                     </div>
                   </div>
                 )}

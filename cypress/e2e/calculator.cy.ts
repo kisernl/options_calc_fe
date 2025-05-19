@@ -8,38 +8,46 @@ describe('Options Calculator', () => {
       name: 'Apple Inc.'
     };
   
-    const mockOptionChain = {
-      contracts: [
-        {
-          id: 'AAPL123',
-          symbol: 'AAPL',
-          expiration_date: '2023-12-31',
-          strike_price: 170,
-          option_type: 'call',
-          premium: 5.67
-        },
-        {
-          id: 'AAPL124',
-          symbol: 'AAPL',
-          expiration_date: '2023-12-31',
-          strike_price: 175,
-          option_type: 'call',
-          premium: 3.45
-        }
-      ]
-    };
+    const mockOptionChain = [
+      {
+        id: 'AAPL123',
+        symbol: 'AAPL',
+        expiration_date: '2023-12-31',
+        strike_price: 170,
+        type: 'call',
+        option_type: 'call',
+        premium: 5.67,
+        side: 'buy',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: 'AAPL124',
+        symbol: 'AAPL',
+        expiration_date: '2023-12-31',
+        strike_price: 175,
+        type: 'call',
+        option_type: 'call',
+        premium: 5.67,
+        side: 'buy',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
   
     beforeEach(() => {
       // Set up API key in localStorage before each test
       window.localStorage.setItem('alpaca_api_key', 'test-api-key');
       window.localStorage.setItem('alpaca_api_secret', 'test-api-secret');
   
-      // Mock the stock price API
-      cy.intercept('GET', 'https://data.alpaca.markets/v2/stocks/trades/latest*', {
+      // Mock the stock price API - match the format expected by the component
+      cy.intercept('GET', '**/v2/stocks/trades/latest*', {
         statusCode: 200,
         body: {
           trades: {
-            AAPL: {
+            [mockStockData.symbol]: {
               p: mockStockData.price,
               s: mockStockData.symbol,
               t: new Date().toISOString(),
@@ -49,12 +57,12 @@ describe('Options Calculator', () => {
         }
       }).as('getStockPrice');
   
-      // Mock the options chain API
-      cy.intercept('GET', 'https://paper-api.alpaca.markets/v2/options/contracts*', {
+      // Mock the options chain API - match the format expected by the component
+      cy.intercept('GET', '**/v2/options/contracts*', {
         statusCode: 200,
         body: mockOptionChain
       }).as('getOptionChain');
-  
+
       cy.visit('/');
       // Wait for the page to be fully loaded
       cy.get('input[placeholder*="Enter stock symbol"]').should('be.visible');
@@ -80,44 +88,25 @@ describe('Options Calculator', () => {
     });
   
     it('should allow entering and searching for a stock', () => {
-      // Log all network requests
-      cy.intercept('*', (req) => {
-        console.log('Request:', req.method, req.url);
-        req.continue();
-      });
-
       // Type in the stock symbol
       cy.get('input[placeholder*="Enter stock symbol"]')
-        .type('AAPL')
+        .type('AAPL', { delay: 100 })
         .should('have.value', 'AAPL');
       
-      // Click the "Go" button to submit the form
-      cy.get('form').first().within(() => {
-        cy.get('button[type="submit"]').click();
-      });
-      
-      // Wait for the stock price API call and log the response
-      cy.wait('@getStockPrice').then((interception) => {
-        console.log('Stock price API response:', interception.response?.body);
-      });
-
-      // Add a small delay to ensure the UI updates
-      cy.wait(1000);
-      
-      // Debug: Log the entire body to see what's rendered
-      cy.document().then((doc) => {
-        console.log('Document body:', doc.body.innerText);
-      });
-      
-      // Check if the stock data is loaded by looking for the stock symbol
-      cy.contains('AAPL', { timeout: 10000 }).should('be.visible');
-      
-      // Now look for the price
-      cy.get('div').contains('Current Price', { timeout: 10000 })
+      // Click the submit button
+      cy.get('button[type="submit"]')
         .should('be.visible')
-        .parent()
-        .find('span')
-        .should('contain', '175.34');
+        .click({ force: true });
+      
+      // Wait for the stock price API call
+      cy.wait('@getStockPrice');
+      
+      // Wait for the options chain API call
+      cy.wait('@getOptionChain');
+      
+      // Check if the current price is displayed
+      cy.contains('.text-gray-800', mockStockData.price.toFixed(2), { timeout: 10000 })
+        .should('be.visible');
     });
   
     it('should allow selecting expiration date after stock is selected', () => {
@@ -125,13 +114,16 @@ describe('Options Calculator', () => {
       cy.get('input[placeholder*="Enter stock symbol"]').type('AAPL');
       cy.get('form').first().submit();
       
-      // Wait for the stock data to load
+      // Wait for the stock price API call
       cy.wait('@getStockPrice');
       
-      // The date picker should now be visible and enabled
-      cy.get('input[type="date"]')
+      // Wait for the options chain to load
+      cy.wait('@getOptionChain');
+      
+      // The date picker should now be enabled
+      cy.get('input[type="date"]', { timeout: 10000 })
         .should('be.visible')
-        .should('not.be.disabled');
+        .and('not.have.attr', 'disabled');
     });
   
     it('should show validation errors for required fields', () => {
@@ -147,15 +139,28 @@ describe('Options Calculator', () => {
       cy.get('input[placeholder*="Enter stock symbol"]').type('AAPL');
       cy.get('form').first().submit();
       
-      // Wait for the stock data to load
+      // Wait for the stock price API call
       cy.wait('@getStockPrice');
       
-      // Click reset - use force:true in case the button is covered
-      cy.contains('button', 'Reset').click({ force: true });
+      // Wait for the options chain API call
+      cy.wait('@getOptionChain');
       
-      // Verify the input is cleared - add a wait to ensure the reset completes
-      cy.wait(500);
-      cy.get('input[placeholder*="Enter stock symbol"]').should('have.value', '');
+      // Click the reset button
+      cy.get('button')
+        .contains('Reset')
+        .should('be.visible')
+        .click({ force: true });
+      
+      // Wait for the reset to complete
+      cy.wait(1000);
+      
+      // Verify the input is cleared
+      cy.get('input[placeholder*="Enter stock symbol"]')
+        .should('have.value', '');
+      
+      // Verify the current price is not visible
+      cy.contains('.text-gray-800', mockStockData.price.toFixed(2))
+        .should('not.exist');
     });
   
     it('should show API key modal', () => {

@@ -9,6 +9,7 @@ interface StrikePriceSelectorProps {
   stockPrice: number;
   isLoading: boolean;
   disabled: boolean;
+  optionType: 'CALL' | 'PUT';
 }
 
 const StrikePriceSelector: React.FC<StrikePriceSelectorProps> = ({
@@ -18,6 +19,7 @@ const StrikePriceSelector: React.FC<StrikePriceSelectorProps> = ({
   stockPrice,
   isLoading,
   disabled,
+  optionType,
 }) => {
   if (isLoading) {
     return (
@@ -52,28 +54,32 @@ const StrikePriceSelector: React.FC<StrikePriceSelectorProps> = ({
           
           return (
             <button
-              key={`${option.strike_price}-${option.type}`}
+              key={`${option.strike_price}-${optionType}`}
               onClick={() => onStrikeSelect(option.strike_price)}
               disabled={disabled}
               className={`relative py-3 px-2 rounded-md flex flex-col items-center justify-center transition-all duration-200 ${
                 selectedStrike === option.strike_price
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-white border text-gray-700 hover:bg-gray-50'
-              } ${
-                isAtStock 
-                  ? 'border-green-500 border-2' 
-                  : isAboveStock 
-                    ? 'border-red-200' 
-                    : 'border-green-200'
+                  ? 'bg-blue-100 text-blue-600 shadow-md border-blue-600' // Selected state
+                  : `bg-white border text-gray-700 hover:bg-gray-50 ${
+                      isAtStock 
+                        ? 'border-green-500 border-2' 
+                        : (optionType === 'PUT' && isAboveStock) || (optionType === 'CALL' && isBelowStock)
+                          ? 'border-red-200 bg-red-50'
+                          : 'border-green-200 bg-green-50'
+                    }`
               } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
               <span className="font-semibold">${option.strike_price.toFixed(2)}</span>
-              {(isAboveStock || isBelowStock) && (
+              {!isAtStock && selectedStrike !== option.strike_price && (
                 <div className="absolute top-1 right-1">
-                  {isAboveStock ? (
-                    <TrendingUp className="w-3 h-3 text-red-500" />
+                  {optionType === 'PUT' ? (
+                    <TrendingDown className={`w-3 h-3 ${
+                      isAboveStock ? 'text-red-500' : 'text-green-500'
+                    }`} />
                   ) : (
-                    <TrendingDown className="w-3 h-3 text-green-500" />
+                    <TrendingUp className={`w-3 h-3 ${
+                      isBelowStock ? 'text-red-500' : 'text-green-500'
+                    }`} />
                   )}
                 </div>
               )}
