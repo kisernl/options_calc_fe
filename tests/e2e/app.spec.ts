@@ -18,8 +18,8 @@ test.describe('Options Calculator', () => {
         await expect(page.locator('label').filter({ hasText: /Expiration Date/i })).toBeVisible();
         await expect(page.locator('label').filter({ hasText: /Strike Price/i })).toBeVisible();
         
-        // Verify the option type buttons are present
-        await expect(page.getByRole('button', { name: /PUT/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /CALL/i })).toBeVisible();
+        // Verify the option type buttons are present using more specific selectors
+        await expect(page.getByRole('button', { name: 'Cash Secured Put' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Covered Call' })).toBeVisible();
     });
 });
