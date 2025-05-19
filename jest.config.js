@@ -1,6 +1,6 @@
 // @ts-check
 /** @type {import('ts-jest').JestConfigWithTsJest} */
-module.exports = {
+const config = {
   preset: 'ts-jest/presets/default',
   testEnvironment: 'jsdom',
   moduleNameMapper: {
@@ -13,7 +13,7 @@ module.exports = {
       'ts-jest',
       {
         tsconfig: 'tsconfig.jest.json',
-        useESM: false,
+        useESM: true,
       },
     ],
   },
@@ -31,7 +31,10 @@ module.exports = {
   ],
   globals: {
     'ts-jest': {
-      useESM: false,
+      useESM: true,
     },
   },
 };
+
+// Export the config using CommonJS syntax for compatibility with Jest
+export default config;

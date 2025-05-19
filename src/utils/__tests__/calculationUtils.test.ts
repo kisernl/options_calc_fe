@@ -82,8 +82,8 @@ describe('Calculation Utilities', () => {
       // Capital required = strike * 100 * contracts = 95 * 100 * 1 = 9500
       expect(result.capitalRequired).toBe(9500);
       
-      // Return on capital = (premium / capitalRequired) * 100 = (250 / 9500) * 100 ≈ 2.63%
-      expect(result.returnOnCapital).toBeCloseTo(2.63, 2);
+      // Return on capital = (premium / capitalRequired) = (250 / 9500) ≈ 0.0263 (2.63%)
+      expect(result.returnOnCapital).toBeCloseTo(0.0263, 4);
       
       // Annualized return should be positive
       expect(result.annualizedReturn).toBeGreaterThan(0);
@@ -133,8 +133,8 @@ describe('Calculation Utilities', () => {
       // Capital required = $100 * 100 shares * 1 contract = $10,000 (current stock price)
       expect(result.capitalRequired).toBe(10000);
       
-      // Return on capital = (300 / 10000) * 100 = 3%
-      expect(result.returnOnCapital).toBe(3);
+      // Return on capital = (300 / 10000) = 0.03 (3%)
+      expect(result.returnOnCapital).toBe(0.03);
     });
 
     test('should calculate covered call metrics with owned shares', () => {
@@ -153,8 +153,8 @@ describe('Calculation Utilities', () => {
       // Capital required = $90 * 100 shares * 1 contract = $9,000 (purchase price)
       expect(result.capitalRequired).toBe(9000);
       
-      // Return on capital = (300 / 9000) * 100 = ~3.33%
-      expect(result.returnOnCapital).toBeCloseTo(3.33, 2);
+      // Return on capital = (300 / 9000) ≈ 0.0333 (~3.33%)
+      expect(result.returnOnCapital).toBeCloseTo(0.0333, 4);
     });
   });
 
